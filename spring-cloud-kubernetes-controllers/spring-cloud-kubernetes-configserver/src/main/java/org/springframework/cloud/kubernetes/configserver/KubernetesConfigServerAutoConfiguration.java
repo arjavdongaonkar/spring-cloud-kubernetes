@@ -18,6 +18,7 @@ package org.springframework.cloud.kubernetes.configserver;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Logger;
 
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 
@@ -59,10 +60,13 @@ import static org.springframework.cloud.kubernetes.configserver.KubernetesProper
 @EnableConfigurationProperties(KubernetesConfigServerProperties.class)
 public class KubernetesConfigServerAutoConfiguration {
 
+	private static final Logger LOG = Logger.getLogger(KubernetesConfigServerAutoConfiguration.class.getName());
+
 	@Bean
 	@ConditionalOnMissingBean
 	public KubernetesEnvironmentRepositoryFactory kubernetesEnvironmentRepositoryFactory(
-			ObjectProvider<KubernetesEnvironmentRepository> kubernetesEnvironmentRepositoryProvider) {
+		ObjectProvider<KubernetesEnvironmentRepository> kubernetesEnvironmentRepositoryProvider) {
+		LOG.info("Creating KubernetesEnvironmentRepositoryFactory bean...");
 		return new KubernetesEnvironmentRepositoryFactory(kubernetesEnvironmentRepositoryProvider);
 	}
 
@@ -70,10 +74,11 @@ public class KubernetesConfigServerAutoConfiguration {
 	@Profile("kubernetes")
 	@ConditionalOnMissingBean
 	public EnvironmentRepository kubernetesEnvironmentRepository(CoreV1Api coreV1Api,
-			List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers,
-			KubernetesNamespaceProvider kubernetesNamespaceProvider) {
+																 List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers,
+																 KubernetesNamespaceProvider kubernetesNamespaceProvider) {
+		LOG.info("Creating KubernetesEnvironmentRepository bean...");
 		return new KubernetesEnvironmentRepository(coreV1Api, kubernetesPropertySourceSuppliers,
-				kubernetesNamespaceProvider.getNamespace());
+			kubernetesNamespaceProvider.getNamespace());
 	}
 
 	@Bean
@@ -102,20 +107,28 @@ public class KubernetesConfigServerAutoConfiguration {
 	@ConditionalOnKubernetesSecretsEnabled
 	@ConditionalOnProperty("spring.cloud.kubernetes.secrets.enableApi")
 	public KubernetesPropertySourceSupplier secretsPropertySourceSupplier(KubernetesConfigServerProperties properties) {
+		LOG.info("Creating secretsPropertySourceSupplier bean...");
 		return (coreApi, applicationName, namespace, springEnv) -> {
 			List<String> namespaces = namespaceSplitter(properties.getSecretsNamespaces(), namespace);
 			List<MapPropertySource> propertySources = new ArrayList<>();
 
+			LOG.info("Processing namespaces for secrets: " + namespaces);
+
 			namespaces.forEach(space -> {
+				LOG.info("Fetching secrets for namespace: " + space);
 				NormalizedSource source = new NamedSecretNormalizedSource(applicationName, space, false,
-						ConfigUtils.Prefix.DEFAULT, true, true);
+					ConfigUtils.Prefix.DEFAULT, true, true);
 				KubernetesClientConfigContext context = new KubernetesClientConfigContext(coreApi, source, space,
-						springEnv, false);
-				propertySources.add(new KubernetesClientSecretsPropertySource(context));
+					springEnv, false);
+				MapPropertySource propertySource = new KubernetesClientSecretsPropertySource(context);
+				propertySources.add(propertySource);
+				LOG.info("Added property source for namespace: " + space);
 			});
 
+			LOG.info("Total property sources created: " + propertySources.size());
 			return propertySources;
 		};
 	}
+
 
 }
