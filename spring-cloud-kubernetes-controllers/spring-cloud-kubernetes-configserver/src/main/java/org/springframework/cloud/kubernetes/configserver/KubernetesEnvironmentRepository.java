@@ -16,15 +16,13 @@
 
 package org.springframework.cloud.kubernetes.configserver;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.config.environment.Environment;
 import org.springframework.cloud.config.environment.PropertySource;
 import org.springframework.cloud.config.server.environment.EnvironmentRepository;
@@ -45,6 +43,9 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 	private final List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers;
 
 	private final String namespace;
+
+	@Value("${spring.cloud.addProfile.secrets:false}")
+	private boolean addSecretsProfile;
 
 	public KubernetesEnvironmentRepository(CoreV1Api coreApi,
 										   List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers,
@@ -117,6 +118,14 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 	private void addApplicationConfiguration(Environment environment, StandardEnvironment springEnv,
 											 String applicationName) {
 		LOG.debug("Adding application configuration for: " + applicationName);
+
+		Set<String> activeProfiles = new HashSet<>(Arrays.asList(springEnv.getActiveProfiles()));
+		if (!activeProfiles.contains("secrets") && addSecretsProfile) {
+			activeProfiles.add("secrets");
+			springEnv.setActiveProfiles(activeProfiles.toArray(new String[0]));
+			LOG.info("Automatically added 'secrets' profile since it was missing.");
+		}
+
 		kubernetesPropertySourceSuppliers.forEach(supplier -> {
 			LOG.debug("Processing property source supplier: " + supplier.getClass().getSimpleName());
 			List<MapPropertySource> propertySources = supplier.get(coreApi, applicationName, namespace, springEnv);

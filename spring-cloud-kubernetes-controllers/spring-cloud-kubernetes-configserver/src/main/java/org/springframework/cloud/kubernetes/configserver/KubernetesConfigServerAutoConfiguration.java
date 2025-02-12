@@ -117,7 +117,7 @@ public class KubernetesConfigServerAutoConfiguration {
 			namespaces.forEach(space -> {
 				LOG.info("Fetching secrets for namespace: " + space);
 				NormalizedSource source = new NamedSecretNormalizedSource(applicationName, space, false,
-					ConfigUtils.Prefix.DEFAULT, true, true);
+					ConfigUtils.Prefix.DEFAULT, false, true);
 				KubernetesClientConfigContext context = new KubernetesClientConfigContext(coreApi, source, space,
 					springEnv, false);
 				MapPropertySource propertySource = new KubernetesClientSecretsPropertySource(context);
