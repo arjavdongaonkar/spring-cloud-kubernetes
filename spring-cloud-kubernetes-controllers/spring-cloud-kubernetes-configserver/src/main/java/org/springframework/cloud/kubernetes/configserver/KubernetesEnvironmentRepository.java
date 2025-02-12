@@ -44,7 +44,7 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 
 	private final String namespace;
 
-	@Value("${spring.cloud.addProfile.secrets:false}")
+	@Value("${spring.cloud.addProfile.secrets}")
 	private boolean addSecretsProfile;
 
 	public KubernetesEnvironmentRepository(CoreV1Api coreApi,

@@ -23,6 +23,7 @@ import java.util.logging.Logger;
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnCloudPlatform;
@@ -61,6 +62,9 @@ import static org.springframework.cloud.kubernetes.configserver.KubernetesProper
 public class KubernetesConfigServerAutoConfiguration {
 
 	private static final Logger LOG = Logger.getLogger(KubernetesConfigServerAutoConfiguration.class.getName());
+
+	@Value("${spring.cloud.includeProfileSpecificSources}")
+	private boolean includeProfileSpecificSources;
 
 	@Bean
 	@ConditionalOnMissingBean
@@ -117,7 +121,7 @@ public class KubernetesConfigServerAutoConfiguration {
 			namespaces.forEach(space -> {
 				LOG.info("Fetching secrets for namespace: " + space);
 				NormalizedSource source = new NamedSecretNormalizedSource(applicationName, space, false,
-					ConfigUtils.Prefix.DEFAULT, false, true);
+					ConfigUtils.Prefix.DEFAULT, includeProfileSpecificSources, true);
 				KubernetesClientConfigContext context = new KubernetesClientConfigContext(coreApi, source, space,
 					springEnv, false);
 				MapPropertySource propertySource = new KubernetesClientSecretsPropertySource(context);
