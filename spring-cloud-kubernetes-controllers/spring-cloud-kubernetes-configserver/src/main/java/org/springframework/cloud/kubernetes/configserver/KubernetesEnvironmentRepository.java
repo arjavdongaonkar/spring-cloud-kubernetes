@@ -16,15 +16,13 @@
 
 package org.springframework.cloud.kubernetes.configserver;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import io.kubernetes.client.openapi.apis.CoreV1Api;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.config.environment.Environment;
 import org.springframework.cloud.config.environment.PropertySource;
 import org.springframework.cloud.config.server.environment.EnvironmentRepository;
@@ -46,11 +44,14 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 
 	private final String namespace;
 
+
 	public KubernetesEnvironmentRepository(CoreV1Api coreApi,
-			List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers, String namespace) {
+										   List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers,
+										   String namespace) {
 		this.coreApi = coreApi;
 		this.kubernetesPropertySourceSuppliers = kubernetesPropertySourceSuppliers;
 		this.namespace = namespace;
+		LOG.info("Initialized KubernetesEnvironmentRepository with namespace: " + namespace);
 	}
 
 	@Override
@@ -60,62 +61,77 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 
 	@Override
 	public Environment findOne(String application, String profile, String label, boolean includeOrigin) {
+		LOG.info("Finding environment for application: " + application + ", profile: " + profile + ", label: " + label);
+
 		if (!StringUtils.hasText(profile)) {
 			profile = "default";
+			LOG.debug("No profile provided, using default profile");
 		}
-		List<String> profiles = new ArrayList<>(List.of(StringUtils.commaDelimitedListToStringArray(profile)));
 
+		List<String> profiles = new ArrayList<>(List.of(StringUtils.commaDelimitedListToStringArray(profile)));
 		Collections.reverse(profiles);
+
 		if (!profiles.contains("default")) {
 			profiles.add("default");
+			LOG.debug("Added 'default' profile to the list of active profiles");
 		}
-		Environment environment = new Environment(application, profiles.toArray(profiles.toArray(new String[0])), label,
-				null, null);
-		LOG.info("Profiles: " + profile);
-		LOG.info("Application: " + application);
-		LOG.info("Label: " + label);
+
+		Environment environment = new Environment(application, profiles.toArray(new String[0]), label, null, null);
+		LOG.info("Created Environment with profiles: " + StringUtils.collectionToCommaDelimitedString(profiles));
+
 		for (String activeProfile : profiles) {
 			try {
-				// This is needed so that when we get the application name in
-				// SourceDataProcessor.sorted that it actually
-				// exists in the Environment
-				StandardEnvironment springEnv = new KubernetesConfigServerEnvironment(
-						createPropertySources(application));
+				LOG.debug("Processing profile: " + activeProfile);
+				StandardEnvironment springEnv = new KubernetesConfigServerEnvironment(createPropertySources(application));
 				springEnv.setActiveProfiles(activeProfile);
+				LOG.debug("Set active profile in Spring Environment: " + activeProfile);
+
 				if (!"application".equalsIgnoreCase(application)) {
+					LOG.debug("Adding application configuration for: " + application);
 					addApplicationConfiguration(environment, springEnv, application);
 				}
-			}
-			catch (Exception e) {
-				LOG.warn(e);
+			} catch (Exception e) {
+				LOG.warn("Error processing profile: " + activeProfile, e);
 			}
 		}
+
+		LOG.debug("Adding default application configuration for 'application'");
 		StandardEnvironment springEnv = new KubernetesConfigServerEnvironment(createPropertySources("application"));
 		addApplicationConfiguration(environment, springEnv, "application");
+
+		LOG.info("Final Environment: " + environment);
 		return environment;
 	}
 
 	private MutablePropertySources createPropertySources(String application) {
+		LOG.debug("Creating property sources for application: " + application);
 		Map<String, Object> applicationProperties = Map.of("spring.application.name", application);
 		MapPropertySource propertySource = new MapPropertySource("kubernetes-config-server", applicationProperties);
 		MutablePropertySources mutablePropertySources = new MutablePropertySources();
 		mutablePropertySources.addFirst(propertySource);
+		LOG.debug("Added property source: " + propertySource.getName());
 		return mutablePropertySources;
 	}
 
 	private void addApplicationConfiguration(Environment environment, StandardEnvironment springEnv,
-			String applicationName) {
+											 String applicationName) {
+		LOG.debug("Adding application configuration for: " + applicationName);
+
 		kubernetesPropertySourceSuppliers.forEach(supplier -> {
+			LOG.debug("Processing property source supplier: " + supplier.getClass().getSimpleName());
 			List<MapPropertySource> propertySources = supplier.get(coreApi, applicationName, namespace, springEnv);
+			LOG.debug("Found " + propertySources.size() + " property sources for application: " + applicationName);
+
 			propertySources.forEach(propertySource -> {
 				if (propertySource.getPropertyNames().length > 0) {
-					LOG.debug("Adding PropertySource " + propertySource.getName());
+					LOG.debug("Adding PropertySource: " + propertySource.getName());
 					LOG.debug("PropertySource Names: "
-							+ StringUtils.arrayToCommaDelimitedString(propertySource.getPropertyNames()));
+						+ StringUtils.arrayToCommaDelimitedString(propertySource.getPropertyNames()));
 					environment.add(new PropertySource(propertySource.getName(), propertySource.getSource()));
+				} else {
+					LOG.debug("Skipping empty PropertySource: " + propertySource.getName());
 				}
 			});
 		});
 	}
-
 }
