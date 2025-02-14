@@ -44,8 +44,6 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 
 	private final String namespace;
 
-	@Value("${spring.cloud.addProfile.secrets}")
-	private boolean addSecretsProfile;
 
 	public KubernetesEnvironmentRepository(CoreV1Api coreApi,
 										   List<KubernetesPropertySourceSupplier> kubernetesPropertySourceSuppliers,
@@ -118,13 +116,6 @@ public class KubernetesEnvironmentRepository implements EnvironmentRepository {
 	private void addApplicationConfiguration(Environment environment, StandardEnvironment springEnv,
 											 String applicationName) {
 		LOG.debug("Adding application configuration for: " + applicationName);
-
-		Set<String> activeProfiles = new HashSet<>(Arrays.asList(springEnv.getActiveProfiles()));
-		if (!activeProfiles.contains("secrets") && addSecretsProfile) {
-			activeProfiles.add("secrets");
-			springEnv.setActiveProfiles(activeProfiles.toArray(new String[0]));
-			LOG.info("Automatically added 'secrets' profile since it was missing.");
-		}
 
 		kubernetesPropertySourceSuppliers.forEach(supplier -> {
 			LOG.debug("Processing property source supplier: " + supplier.getClass().getSimpleName());
